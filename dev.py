@@ -135,6 +135,8 @@ def display_text_with_privacy_masks(source_text, privacy_mask_df, highlight_colo
     for _, mask in privacy_mask_df.iterrows():
         start = int(mask['start'])
         end = int(mask['end'])
+        if end >= len(source_text):
+            end = len(source_text) # TODO: why does this happen?
         for i in range(start, end):
             mask_array[i] = True
     
@@ -330,11 +332,417 @@ privacy_mask_df.head()
 
 findings_df
 
+# %% Gemini
+
+MODEL_ID="gemini-2.5-flash-lite-preview-06-17"
+PROJECT_ID="firm-dimension-461208-d1"
+
+from google import genai
+from google.genai import types
+client = genai.Client(
+vertexai=True, project=PROJECT_ID, location="global",
+)
+# If your image is stored in Google Cloud Storage, you can use the from_uri class method to create a Part object.
+model = MODEL_ID
+response = client.models.generate_content(
+model=model,
+contents=[
+  "Tell me a joke about ducks"
+],
+)
+print(response.text, end="")
+
+
+# %%
+
+from google import genai
+from pydantic import BaseModel
+
+class PIIdata(BaseModel):
+    value: str
+    type: str
+
+class PIIList(BaseModel):
+    pii_items: list[PIIdata]
+
+client = genai.Client(
+vertexai=True, project=PROJECT_ID, location="global",
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Find all PII in this text and list each piece with its type: " + this_text,
+    config={
+        "response_mime_type": "application/json",
+        "response_schema": PIIList,
+    },
+)
+# Use the response as a JSON string.
+print(response.text)
+
+# Use instantiated objects to show PII found
+pii_list: PIIList = response.parsed
+
+# %%
+
+pii_list.pii_items
+
+# %%
+
+from difflib import SequenceMatcher
+import pandas as pd
+
+def find_substring_indices(text: str, substring: str, threshold: float = 0.85) -> list[tuple[int, int]]:
+    """
+    Find all occurrences of a substring in text using fuzzy matching.
+    Returns list of (start, end) index tuples.
+    
+    Args:
+        text: Text to search in
+        substring: Substring to find
+        threshold: Minimum similarity ratio to consider a match (0-1)
+        
+    Returns:
+        List of (start, end) index tuples for matches
+    """
+    matches = []
+    text_len = len(text)
+    sub_len = len(substring)
+    
+    # Slide window of substring length across text
+    for i in range(text_len - sub_len + 1):
+        window = text[i:i + sub_len]
+        similarity = SequenceMatcher(None, window.lower(), substring.lower()).ratio()
+        if similarity >= threshold:
+            matches.append((i, i + sub_len))
+            
+    return matches
+
+# Find indices for each PII item
+pii_with_indices = []
+for item in pii_list.pii_items:
+    matches = find_substring_indices(this_text, item.value)
+    if matches:
+        # Take the first match if multiple found
+        start, end = matches[0]
+        pii_with_indices.append({
+            'value': item.value,
+            'type': item.type,
+            'start': start,
+            'end': end
+        })
+    else:
+        print(f"Could not find match for PII value: {item.value}")
+
+# Create DataFrame with results        
+pii_indices_df = pd.DataFrame(pii_with_indices)
+print("\nPII items with their locations in text:")
+print(pii_indices_df)
+
+# %%
+
+from IPython.display import HTML
+
+def highlight_pii_in_text(text: str, pii_df: pd.DataFrame, highlight_color: str = '#ffcdd2') -> HTML:
+    """
+    Display text with PII locations highlighted
+    
+    Args:
+        text: Text to display
+        pii_df: DataFrame containing PII entries with start/end columns
+        highlight_color: Color to use for highlighting PII regions (default: light red)
+        
+    Returns:
+        IPython HTML object with highlighted text
+    """
+    from IPython.display import HTML
+    import html
+    
+    # Create array marking which characters contain PII
+    mask_array = [False] * len(text)
+    for _, pii in pii_df.iterrows():
+        start = int(pii['start'])
+        end = int(pii['end'])
+        if end >= len(text):
+            end = len(text)
+        for i in range(start, end):
+            mask_array[i] = True
+    
+    # Build HTML with highlighted regions
+    html_text = ""
+    in_pii_region = False
+    
+    for i, char in enumerate(text):
+        if mask_array[i] and not in_pii_region:
+            # Start new PII region
+            html_text += f'<span style="background-color: {highlight_color}">'
+            in_pii_region = True
+        elif not mask_array[i] and in_pii_region:
+            # End PII region
+            html_text += '</span>'
+            in_pii_region = False
+        html_text += html.escape(char)
+    
+    if in_pii_region:
+        html_text += '</span>'
+    
+    return HTML(f'<pre style="white-space: pre-wrap; word-wrap: break-word;">{html_text}</pre>')
+
+# Display text with PII highlighted
+display(highlight_pii_in_text(this_text, pii_indices_df))
+
+
+
+# %% gemma3 API
+
+from dotenv import load_dotenv
+load_dotenv()
+HF_TOKEN = os.getenv('HF_TOKEN')
+
+import os
+from huggingface_hub import InferenceClient
+
+client = InferenceClient(
+    provider="featherless-ai",
+    api_key=HF_TOKEN,
+)
+
+
+def call_llm(text: str) -> str:
+    """
+    Call LLM with a single text message and return the response.
+    
+    Args:
+        text: The text message to send to the LLM
+        
+    Returns:
+        The LLM's response text
+    """
+    completion = client.chat.completions.create(
+        model="google/gemma-3-27b-it",
+        messages=[
+            {
+                "role": "user", 
+                "content": [
+                    {
+                        "type": "text",
+                        "text": text
+                    }
+                ]
+            }
+        ],
+    )
+    return completion.choices[0].message
+
+# %%
+
+response = call_llm("Tell me a joke about ducks")
+print(response.content)
+
+# %%
+
+import json
+import os
+import json
+from huggingface_hub import InferenceClient
+from pydantic import BaseModel, Field
+from typing import List
+
+class DetectedPII(BaseModel):
+    """A single detected piece of Personally Identifiable Information (PII)."""
+    value: str = Field(..., description="The detected PII value.")
+    type: str = Field(..., description="The type of PII.", enum=["name", "email", "telephone"])
+
+class PIIList(BaseModel):
+    """A list of all PII entities found in the text."""
+    pii: List[DetectedPII]
+
+def get_pii_from_text(text: str) -> PIIList:
+    """
+    Extract PII entities from input text using LLM.
+    
+    Args:
+        text: Input text to analyze for PII
+        
+    Returns:
+        PIIList containing detected PII entities
+    """
+    # Build the tool schema from Pydantic model
+    pii_tool = {
+        "type": "function",
+        "function": {
+            "name": "pii_redactor",
+            "description": "Extracts PII entities from the text based on the provided schema.",
+            "parameters": PIIList.model_json_schema()
+        },
+    }
+
+    # Call LLM API with tool schema
+    completion = client.chat.completions.create(
+        model="google/gemma-3-27b-it",
+        messages=[
+            {"role": "system", "content": "You are a PII detection assistant. Use the pii_redactor tool to extract all entities"},
+            {"role": "user", "content": text},
+        ],
+        tools=[pii_tool],
+        tool_choice={"type": "function", "function": {"name": "pii_redactor"}},
+    )
+
+    # Parse and validate response
+    message = completion.choices[0].message
+    if message.tool_calls:
+        tool_arguments_string = message.tool_calls[0].function.arguments
+        return PIIList.model_validate_json(tool_arguments_string)
+    
+    return message
+
+
+# %%
+
+this_ind = 3234
+this_text = dataset['train'][this_ind]['source_text']
+
+pii_list = get_pii_from_text(this_text)
+
+print(this_text)
+print(pii_list)
+
+# %%
+
+text_to_analyze = "You can reach out to Jane Doe at jane.doe@example.com or by phone at 123-456-7890."
+
+xx = get_pii_from_text(text_to_analyze)
+xx
+
+# %%
+
+import os
+import json
+from huggingface_hub import InferenceClient
+
+# The text we want to analyze for PII
+text_to_analyze = this_text
+
+# 1. A detailed prompt instructing the model to generate JSON
+prompt = """
+You are an expert PII (Personally Identifiable Information) detection tool.
+Your task is to analyze the user's text and identify all instances of names, emails, and telephone numbers.
+
+Your output must be a JSON object with a single key "pii".
+The value of "pii" should be a list of objects, where each object has two fields:
+1. "value": The detected PII string.
+2. "type": The type of PII, which must be one of the following strings: "name", "email", or "telephone".
+
+If no PII is found, return an empty list: {"pii": []}.
+"""
+
+# 2. Call the client with the new prompt and response_format
+completion = client.chat.completions.create(
+    model="google/gemma-3-27b-it",
+    messages=[
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": text_to_analyze},
+    ],
+    response_format={"type": "json_object"}, # 3. Request JSON output
+)
+
+# 4. Parse the JSON string from the response
+message_content = completion.choices[0].message.content
+structured_output = json.loads(message_content)
+
+# Print the pretty-printed structured output
+print(json.dumps(structured_output, indent=2))
+
+# %%
+
+completion.choices[0].message
+
+# %%
+
+
+
+# %%
+
+structured_output
+
+
+# %%
+
+pii_list
+
+# %%
+
+
+# %% gemma3 
+
+import os
+from typing import List
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.prompts import ChatPromptTemplate
+
+# Set your Google API key as an environment variable
+# os.environ["GOOGLE_API_KEY"] = "YOUR_GOOGLE_API_KEY"
+
+# 1. Define the desired structured output
+class DetectedPII(BaseModel):
+    """A single detected piece of Personally Identifiable Information (PII)."""
+    value: str = Field(..., description="The detected PII value.")
+    type: str = Field(..., description="The type of PII.",
+                    enum=["name", "email", "telephone"])
+
+class PIIList(BaseModel):
+    """A list of detected PII."""
+    pii: List[DetectedPII]
+
+# 2. Create the language model instance with structured output
+# Make sure to use a model that supports structured output, like "gemma-3"
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+structured_llm = llm.with_structured_output(PIIList)
+
+# 3. Formulate a system prompt for PII detection
+system_prompt = """
+You are an expert in PII (Personally Identifiable Information) detection.
+Your task is to analyze the given text and extract any PII.
+The only allowed PII types are: 'name', 'email', and 'telephone'.
+Return a list of all detected PII, each with its value and type.
+If no PII is found, return an empty list.
+"""
+
+# 4. Create the prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    ("human", "{text_to_analyze}"),
+])
+
+# 5. Chain the prompt and the structured LLM
+chain = prompt | structured_llm
+
+# 6. Run the chain with some example text
+text_with_pii = "Contact John Doe at john.doe@email.com or call him at 123-456-7890. Jane's number is (987) 654-3210."
+response = chain.invoke({"text_to_analyze": text_with_pii})
+
+# Print the structured output
+for pii_item in response.pii:
+    print(f"Value: {pii_item.value}, Type: {pii_item.type}")
+
+print("-" * 20)
+
+# Example with no PII
+text_without_pii = "This is a sample sentence without any personal information."
+response_no_pii = chain.invoke({"text_to_analyze": text_without_pii})
+
+if not response_no_pii.pii:
+    print("No PII detected.")
+else:
+    for pii_item in response_no_pii.pii:
+        print(f"Value: {pii_item.value}, Type: {pii_item.type}")
+
 # %%
 
 print(this_entry['source_text'])
 
-# %%
+# %% run DLP on random samples
 
 import numpy as np
 import tqdm
@@ -357,6 +765,7 @@ for idx in tqdm.tqdm(random_indices):
     
     # Add index column to findings
     findings['sample_idx'] = idx
+    findings['text_length'] = len(source_text)
     
     # Append to results
     all_findings.append(findings)
@@ -368,7 +777,12 @@ combined_findings_df = pd.concat(all_findings, ignore_index=True)
 print(f"Found {len(combined_findings_df)} findings across {n_samples} random samples")
 combined_findings_df.head()
 
-# %% get privacy masks
+# %%
+
+# check text length < end index
+combined_findings_df[combined_findings_df['text_length'] < combined_findings_df['end']]
+
+# %% get privacy masks for all samples from annotated ground truth
 
 # Initialize list to store privacy masks
 all_privacy_masks = []
@@ -386,7 +800,7 @@ privacy_mask_df = pd.concat(all_privacy_masks, ignore_index=True)
 # %% 
 # Compare privacy masks and DLP findings for each sample
 # Loop through all random samples
-for idx in random_indices:
+for idx in random_indices[:4]:
     # Get original text
     entry = dataset['train'][int(idx)]
     source_text = entry['source_text']
@@ -405,7 +819,7 @@ for idx in random_indices:
     print('-'*100)
     display(display_text_with_privacy_masks(source_text, sample_findings, highlight_color='#c8e6c9'))
 
-# %%
+# %% compute quality metrics
 
 # Initialize lists to store metrics
 metrics = []
