@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import List, Type
 from google import genai
 from huggingface_hub import InferenceClient
-import config
+from pii_redaction import config
 
 # --- Google Gemini Client ---
 def get_gemini_client():
@@ -43,10 +43,17 @@ def query_gemini_structured(
                 "response_schema": response_schema,
             },
         )
-        return response.parsed
+
+        usage_metadata = {
+            'prompt_token_count': response.usage_metadata.prompt_token_count,
+            'candidates_token_count': response.usage_metadata.candidates_token_count,
+            'total_token_count': response.usage_metadata.total_token_count
+        }
+
+        return response.parsed, usage_metadata
     except Exception as e:
         print(f"Error querying Gemini: {e}")
-        return None
+        return None, None
 
 # --- Hugging Face Client ---
 def get_huggingface_client():

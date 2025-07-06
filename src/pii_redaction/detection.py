@@ -7,11 +7,10 @@ import pandas as pd
 import google.cloud.dlp_v2
 from pii_redaction.llm import clients
 from typing import List, Dict
-import config
 from pydantic import BaseModel
 from enum import Enum
 import regex
-from config import FUZZY_MATCH_THRESHOLDS, FUZZY_MATCH_DEFAULT_EDITS
+from pii_redaction import config
 
 # --- Pydantic Schemas for Structured Output ---
 class PIIType(str, Enum):
@@ -82,14 +81,14 @@ def detect_pii_with_gemini(text: str) -> List[Dict]:
     """
     prompt = f"Find all PII in this text and list each piece with its type: {text}"
     gemini_client = clients.get_gemini_client()
-    parsed_response = clients.query_gemini_structured(gemini_client, prompt, PIIList)
+    parsed_response, usage_metadata = clients.query_gemini_structured(gemini_client, prompt, PIIList)
 
     if parsed_response and hasattr(parsed_response, 'pii_items'):
         return [{
             'value': item.value,
             'type': item.type.value
-        } for item in parsed_response.pii_items]
-    return []
+        } for item in parsed_response.pii_items], usage_metadata
+    return [], usage_metadata
 
 def get_allowed_edits(word_length: int) -> int:
     """
@@ -101,10 +100,10 @@ def get_allowed_edits(word_length: int) -> int:
     Returns:
         Number of allowed edits for fuzzy matching
     """
-    for max_length, edits in FUZZY_MATCH_THRESHOLDS:
+    for max_length, edits in config.FUZZY_MATCH_THRESHOLDS:
         if word_length <= max_length:
             return edits
-    return FUZZY_MATCH_DEFAULT_EDITS
+    return config.FUZZY_MATCH_DEFAULT_EDITS
 
 
 def find_fuzzy_matches(findings_df: pd.DataFrame, text: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -126,7 +125,9 @@ def find_fuzzy_matches(findings_df: pd.DataFrame, text: str) -> tuple[pd.DataFra
     
     for _, finding in findings_df.iterrows():
         allowed_edits = get_allowed_edits(len(finding['value']))
-        pattern = regex.compile(r'(' + finding['value'] + '){e<=' + str(allowed_edits) + '}', flags=regex.BESTMATCH)
+        escaped_value = regex.escape(finding['value'])
+        pattern_str = r'(' + escaped_value + '){e<=' + str(allowed_edits) + '}'
+        pattern = regex.compile(pattern_str, flags=regex.BESTMATCH)
         
         # Find all non-overlapping matches
         pos = 0

@@ -15,6 +15,9 @@ HF_TOKEN = os.getenv('HF_TOKEN')
 
 # --- Model Configuration ---
 GEMINI_MODEL_ID = "gemini-2.5-flash-lite-preview-06-17"
+GEMINI_INPUT_TOKEN_COST = 0.1 # $0.1 per 1M tokens
+GEMINI_OUTPUT_TOKEN_COST = 0.4 # $0.4 per 1M tokens
+
 HUGGINGFACE_MODEL_ID = "google/gemma-3-27b-it"
 
 
