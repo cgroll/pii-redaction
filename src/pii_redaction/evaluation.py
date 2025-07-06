@@ -88,5 +88,9 @@ def calculate_char_level_metrics(
     return {
         'precision': precision, 'recall': recall, 'f1_score': f1,
         'accuracy': accuracy, 'true_positives': tp, 'false_positives': fp,
-        'false_negatives': fn
+        'false_negatives': fn, 'true_negatives': tn,
+        'n_ground_truth_positives': truth_mask.count(1),
+        'n_predicted_positives': pred_mask.count(1),
+        'n_ground_truth_negatives': truth_mask.count(0),
+        'n_predicted_negatives': pred_mask.count(0),
     }
