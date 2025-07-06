@@ -15,6 +15,7 @@ dependencies = [
     "ipykernel>=6.29.5",
     "langchain>=0.3.26",
     "langchain-google-genai>=2.1.6",
+    "langchain-openai>=0.3.27",
     "matplotlib>=3.10.3",
     "openai>=1.93.0",
     "pandas>=2.3.0",
