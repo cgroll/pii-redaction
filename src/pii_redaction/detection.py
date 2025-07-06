@@ -11,6 +11,13 @@ from pydantic import BaseModel
 from enum import Enum
 import regex
 from pii_redaction import config
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Pydantic Schemas for Structured Output ---
 class PIIType(str, Enum):
@@ -26,9 +33,18 @@ class PIIEntity(BaseModel):
     value: str
     type: PIIType
 
+class PIIEntityPermissive(BaseModel):
+    """A single detected piece of Personally Identifiable Information (PII)."""
+    value: str
+    type: str
+
 class PIIList(BaseModel):
     """A list of all PII entities found in the text."""
     pii_items: List[PIIEntity]
+
+class PIIListPermissive(BaseModel):
+    """A list of all PII entities found in the text."""
+    pii_items: List[PIIEntityPermissive]
 
 # --- Google Cloud DLP ---
 def inspect_text_with_dlp(text: str) -> pd.DataFrame:
@@ -89,6 +105,45 @@ def detect_pii_with_gemini(text: str) -> List[Dict]:
             'type': item.type.value
         } for item in parsed_response.pii_items], usage_metadata
     return [], usage_metadata
+
+def detect_pii_with_gemma(text: str) -> List[Dict]:
+    """
+    Uses the Gemini client to detect PII in text with structured output.
+
+    Args:
+        text: The text to analyze.
+
+    Returns:
+        A list of detected PII entities. Each entity is a dictionary with
+        'value', 'type', and a boolean 'is_valid_type' to indicate if the
+        type conforms to the allowed PIIType enum.
+    """
+
+    model = ChatOpenAI(
+        model="google/gemma-3-27b-it-fast",
+        base_url="https://router.huggingface.co/nebius/v1",
+        api_key=os.environ["HF_TOKEN"]
+    )
+
+    parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
+
+    prompt = PromptTemplate(
+        template="Find all PII in this text and list each piece with its type. Allowed types are: {allowed_types}\n{query}\n{format_instructions}\n",
+        input_variables=["query"],
+        partial_variables={"format_instructions": parser.get_format_instructions(),
+                           "allowed_types": "\n".join([f"- {t}" for t in config.LLM_PII_TYPES])}
+    )
+
+    chain = prompt | model | parser
+    pii_list = chain.invoke({"query": text})
+
+    valid_types = {member.value for member in PIIType}
+
+    return [{
+        'value': item.value,
+        'type': item.type,
+        'is_valid_type': item.type in valid_types
+    } for item in pii_list.pii_items]
 
 def get_allowed_edits(word_length: int) -> int:
     """
