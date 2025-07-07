@@ -7,3 +7,4 @@ class ProjPaths:
     project_path = current_file_path.parent.parent.parent
 
     data_path = project_path / 'data'
+    figures_path = project_path / 'output'

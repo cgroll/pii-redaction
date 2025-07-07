@@ -9,6 +9,7 @@ from IPython.display import HTML
 from difflib import SequenceMatcher
 from typing import List, Tuple
 import html
+import numpy as np
 
 # --- Visualization ---
 def highlight_spans_in_text(text: str, spans_df: pd.DataFrame, highlight_color: str = '#ffcccb') -> HTML:
@@ -80,10 +81,10 @@ def calculate_char_level_metrics(
     fn = sum(1 for t, p in zip(truth_mask, pred_mask) if t == 1 and p == 0)
     tn = sum(1 for t, p in zip(truth_mask, pred_mask) if t == 0 and p == 0)
 
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    accuracy = (tp + tn) / text_length if text_length > 0 else 0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else np.nan
+    recall = tp / (tp + fn) if (tp + fn) > 0 else np.nan
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else np.nan
+    accuracy = (tp + tn) / text_length if text_length > 0 else np.nan
 
     return {
         'precision': precision, 'recall': recall, 'f1_score': f1,
