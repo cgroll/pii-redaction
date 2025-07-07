@@ -16,6 +16,8 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 import os
 from dotenv import load_dotenv
+import ollama
+import json
 
 load_dotenv()
 
@@ -144,6 +146,113 @@ def detect_pii_with_gemma(text: str) -> List[Dict]:
         'type': item.type,
         'is_valid_type': item.type in valid_types
     } for item in pii_list.pii_items]
+
+def detect_pii_with_llama_3_2_3B(text: str) -> List[Dict]:
+    """
+    Uses the Gemini client to detect PII in text with structured output.
+
+    Args:
+        text: The text to analyze.
+
+    Returns:
+        A list of detected PII entities. Each entity is a dictionary with
+        'value', 'type', and a boolean 'is_valid_type' to indicate if the
+        type conforms to the allowed PIIType enum.
+    """
+
+    model = ChatOpenAI(
+        model="meta-llama/llama-3.2-3b-instruct",
+        base_url="https://router.huggingface.co/novita/v3/openai",
+        api_key=os.environ["HF_TOKEN"]
+    )
+
+    parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
+
+    prompt = PromptTemplate(
+        template="Find all PII in this text and list each piece with its type. Allowed types are: {allowed_types}\n{query}\n{format_instructions}\n",
+        input_variables=["query"],
+        partial_variables={"format_instructions": parser.get_format_instructions(),
+                           "allowed_types": "\n".join([f"- {t}" for t in config.LLM_PII_TYPES])}
+    )
+
+    chain = prompt | model | parser
+    pii_list = chain.invoke({"query": text})
+
+    valid_types = {member.value for member in PIIType}
+
+    return [{
+        'value': item.value,
+        'type': item.type,
+        'is_valid_type': item.type in valid_types
+    } for item in pii_list.pii_items]
+
+def detect_pii_with_ollama_gemma3_1b(text: str):
+    """
+    Detects PII in text using a local Ollama model with JSON output.
+    """
+    try:
+        
+        parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
+        json_schema = parser.get_format_instructions()
+
+        system_prompt = """
+        You are an expert PII detection system. Your task is to identify and extract
+        Personally Identifiable Information (PII) from the given text.
+
+        You MUST format your output as a JSON object that strictly adheres to the
+        following JSON Schema. Do not include any other explanatory text.
+        The schema is a list of objects, where each object has a 'value' and a 'type' key.
+
+        {'pii_items': [
+            {'value': 'the value of the PII entity found',
+              'type': 'the type of the PII entity found',
+            },
+            {'value': 'the value of another PII entity found',
+              'type': 'the type of another PII entity found',
+            }
+        ]}
+
+        Allowed types are:
+        - PHONE_NUMBER
+        - EMAIL_ADDRESS
+        - CREDIT_CARD_NUMBER
+        - US_SOCIAL_SECURITY_NUMBER
+        - PERSON_NAME
+        - DATE_OF_BIRTH
+        - LOCATION
+        - STREET_ADDRESS
+
+        Here is the text to analyze:
+        """
+
+        # Make the call to the Ollama API using the ollama-python library
+        response = ollama.chat(
+            model='gemma3:1b', 
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': text},
+            ],
+            format='json',
+        )
+
+        content_string = response['message']['content']
+
+        parsed_json = json.loads(content_string)
+
+        valid_types = {member.value for member in PIIType}
+
+        if 'pii_items' not in parsed_json:
+            return []
+
+        return [{
+            'value': item['value'],
+            'type': item['type'],
+            'is_valid_type': item['type'] in valid_types
+        } for item in parsed_json['pii_items']]
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
 
 def get_allowed_edits(word_length: int) -> int:
     """

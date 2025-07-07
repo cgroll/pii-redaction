@@ -17,6 +17,7 @@ dependencies = [
     "langchain-google-genai>=2.1.6",
     "langchain-openai>=0.3.27",
     "matplotlib>=3.10.3",
+    "ollama>=0.5.1",
     "openai>=1.93.0",
     "pandas>=2.3.0",
     "pydantic>=2.11.7",

@@ -3,7 +3,7 @@
 from pii_redaction.data_loader import load_pii_dataset
 import pandas as pd
 from pii_redaction.paths import ProjPaths
-from pii_redaction.detection import detect_pii_with_gemma, find_fuzzy_matches
+from pii_redaction.detection import detect_pii_with_gemma, detect_pii_with_ollama_gemma3_1b, find_fuzzy_matches
 from tqdm import tqdm
 import time
 from pii_redaction import config
@@ -27,7 +27,7 @@ for this_id in tqdm(sampled_df['id'], desc="Running Gemma on samples"):
     entry = dataset[int(idx)]
     source_text = entry['source_text']
 
-    gemma_findings = detect_pii_with_gemma(source_text)
+    gemma_findings = detect_pii_with_ollama_gemma3_1b(source_text)
 
     # Create DataFrame with all Gemini findings
     findings_df = pd.DataFrame([{
@@ -47,5 +47,7 @@ unmatched_df = pd.concat(all_unmatched, ignore_index=True) if all_unmatched else
 
 # %%
 
-gemma_results_df.to_csv(ProjPaths.data_path / 'pii_masking_300k_gemma_results.csv', index=False)
-unmatched_df.to_csv(ProjPaths.data_path / 'pii_masking_300k_gemma_unmatched.csv', index=False)
+gemma_results_df.to_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_1b_results.csv', index=False)
+unmatched_df.to_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_1b_unmatched.csv', index=False)
+
+# %%
