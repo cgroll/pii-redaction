@@ -108,7 +108,7 @@ def detect_pii_with_gemini(text: str) -> List[Dict]:
         } for item in parsed_response.pii_items], usage_metadata
     return [], usage_metadata
 
-def detect_pii_with_gemma(text: str) -> List[Dict]:
+def detect_pii_with_gemma_api(text: str) -> List[Dict]:
     """
     Uses the Gemini client to detect PII in text with structured output.
 
@@ -147,53 +147,14 @@ def detect_pii_with_gemma(text: str) -> List[Dict]:
         'is_valid_type': item.type in valid_types
     } for item in pii_list.pii_items]
 
-def detect_pii_with_llama_3_2_3B(text: str) -> List[Dict]:
-    """
-    Uses the Gemini client to detect PII in text with structured output.
-
-    Args:
-        text: The text to analyze.
-
-    Returns:
-        A list of detected PII entities. Each entity is a dictionary with
-        'value', 'type', and a boolean 'is_valid_type' to indicate if the
-        type conforms to the allowed PIIType enum.
-    """
-
-    model = ChatOpenAI(
-        model="meta-llama/llama-3.2-3b-instruct",
-        base_url="https://router.huggingface.co/novita/v3/openai",
-        api_key=os.environ["HF_TOKEN"]
-    )
-
-    parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
-
-    prompt = PromptTemplate(
-        template="Find all PII in this text and list each piece with its type. Allowed types are: {allowed_types}\n{query}\n{format_instructions}\n",
-        input_variables=["query"],
-        partial_variables={"format_instructions": parser.get_format_instructions(),
-                           "allowed_types": "\n".join([f"- {t}" for t in config.LLM_PII_TYPES])}
-    )
-
-    chain = prompt | model | parser
-    pii_list = chain.invoke({"query": text})
-
-    valid_types = {member.value for member in PIIType}
-
-    return [{
-        'value': item.value,
-        'type': item.type,
-        'is_valid_type': item.type in valid_types
-    } for item in pii_list.pii_items]
-
-def detect_pii_with_ollama_gemma3_1b(text: str):
+def detect_pii_with_ollama(text: str, model='gemma3:1b'):
     """
     Detects PII in text using a local Ollama model with JSON output.
     """
     try:
         
-        parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
-        json_schema = parser.get_format_instructions()
+        # parser = PydanticOutputParser(pydantic_object=PIIListPermissive)
+        # json_schema = parser.get_format_instructions()
 
         system_prompt = """
         You are an expert PII detection system. Your task is to identify and extract
@@ -227,7 +188,7 @@ def detect_pii_with_ollama_gemma3_1b(text: str):
 
         # Make the call to the Ollama API using the ollama-python library
         response = ollama.chat(
-            model='gemma3:1b', 
+            model=model, 
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': text},
