@@ -3,7 +3,7 @@
 from pii_redaction.data_loader import load_pii_dataset
 import pandas as pd
 from pii_redaction.paths import ProjPaths
-from pii_redaction.detection import detect_pii_with_gemma, detect_pii_with_ollama_gemma3_1b, find_fuzzy_matches
+from pii_redaction.detection import detect_pii_with_gemma_api, detect_pii_with_ollama, find_fuzzy_matches
 from tqdm import tqdm
 import time
 from pii_redaction import config
@@ -27,7 +27,7 @@ for this_id in tqdm(sampled_df['id'], desc="Running Gemma on samples"):
     entry = dataset[int(idx)]
     source_text = entry['source_text']
 
-    gemma_findings = detect_pii_with_ollama_gemma3_1b(source_text)
+    gemma_findings = detect_pii_with_ollama(source_text, model='gemma3:12b-it-qat')
 
     # Create DataFrame with all Gemini findings
     findings_df = pd.DataFrame([{

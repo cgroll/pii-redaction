@@ -44,6 +44,14 @@ unmatched_df = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_gemini_unmatc
 gemma_results_df = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_gemma_results.csv')
 unmatched_df_gemma = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_gemma_unmatched.csv')
 
+# load gemma 1b results
+gemma_1b_results_df = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_1b_results.csv')
+unmatched_df_gemma_1b = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_1b_unmatched.csv')
+
+# load gemma 12b qat results
+gemma_12b_qat_results_df = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_12b_qat_results.csv')
+unmatched_df_gemma_12b_qat = pd.read_csv(ProjPaths.data_path / 'pii_masking_300k_ollama_gemma3_12b_qat_unmatched.csv')
+
 # %% some stats for gemini
 
 gemini_total_costs = gemini_costs_df['total_cost'].sum()
@@ -107,12 +115,27 @@ def calculate_metrics_for_samples(pii_results_df, ground_truth_df, sampled_df, d
 dlp_metrics_df = calculate_metrics_for_samples(dlp_results_df, ground_truth_df, sampled_df, dataset)
 gemini_metrics_df = calculate_metrics_for_samples(gemini_results_df, ground_truth_df, sampled_df, dataset)
 gemma_metrics_df = calculate_metrics_for_samples(gemma_results_df, ground_truth_df, sampled_df, dataset)
+gemma_1b_metrics_df = calculate_metrics_for_samples(gemma_1b_results_df, ground_truth_df, sampled_df, dataset)
+gemma_12b_qat_metrics_df = calculate_metrics_for_samples(gemma_12b_qat_results_df, ground_truth_df, sampled_df, dataset)
 
 # %%
 
-dlp_metrics_df['f1_score'].mean()
-gemini_metrics_df['f1_score'].mean()
-gemma_metrics_df['f1_score'].mean()
+# Create bar chart of F1 scores
+f1_scores = {
+    'DLP': dlp_metrics_df['f1_score'].mean(),
+    'Gemini': gemini_metrics_df['f1_score'].mean(), 
+    'Gemma': gemma_metrics_df['f1_score'].mean(),
+    'Gemma 1B': gemma_1b_metrics_df['f1_score'].mean(),
+    'Gemma 12B QAT': gemma_12b_qat_metrics_df['f1_score'].mean()
+}
+
+plt.figure(figsize=(10, 6))
+plt.bar(f1_scores.keys(), f1_scores.values())
+plt.title('Average F1 Scores by Model')
+plt.ylabel('F1 Score')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
 
 # %% scatterplots for metrics
 
@@ -138,6 +161,20 @@ plt.xlabel('Recall')
 plt.ylabel('Precision')
 plt.show()
 
+plt.figure(figsize=(8, 6))
+sns.scatterplot(data=gemma_1b_metrics_df, x='recall', y='precision')
+plt.title('Precision vs. Recall for Gemma 1B')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.show()
+
+plt.figure(figsize=(8, 6))
+sns.scatterplot(data=gemma_12b_qat_metrics_df, x='recall', y='precision')
+plt.title('Precision vs. Recall for Gemma 12B QAT')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.show()
+
 # %% boxplots for metrics
 
 print("\nPlotting aggregate metric distributions...")
@@ -151,7 +188,12 @@ gemini_metrics_long = gemini_metrics_df[['precision', 'recall', 'f1_score']].mel
 gemini_metrics_long['model'] = 'Gemini'
 gemma_metrics_long = gemma_metrics_df[['precision', 'recall', 'f1_score']].melt(var_name='metric', value_name='value') 
 gemma_metrics_long['model'] = 'Gemma'
-combined_metrics = pd.concat([dlp_metrics_long, gemini_metrics_long, gemma_metrics_long])
+gemma_1b_metrics_long = gemma_1b_metrics_df[['precision', 'recall', 'f1_score']].melt(var_name='metric', value_name='value') 
+gemma_1b_metrics_long['model'] = 'Gemma 1B'
+gemma_12b_qat_metrics_long = gemma_12b_qat_metrics_df[['precision', 'recall', 'f1_score']].melt(var_name='metric', value_name='value') 
+gemma_12b_qat_metrics_long['model'] = 'Gemma 12B QAT'
+
+combined_metrics = pd.concat([dlp_metrics_long, gemini_metrics_long, gemma_metrics_long, gemma_1b_metrics_long, gemma_12b_qat_metrics_long])
 
 # Create boxplots
 sns.boxplot(data=combined_metrics[(combined_metrics.metric == 'precision') & (~combined_metrics.value.isna())],
@@ -180,7 +222,7 @@ plt.show()
 # %% metrics for dlp for each language
 
 # Create subplots for F1 scores by language for each model
-fig, axes = plt.subplots(3, 1, figsize=(12, 15))
+fig, axes = plt.subplots(5, 1, figsize=(12, 15))
 
 # DLP plot
 sns.boxplot(data=dlp_metrics_df, x='language', y='f1_score', ax=axes[0])
@@ -203,6 +245,19 @@ axes[2].set_xlabel('Language')
 axes[2].set_ylabel('F1 Score')
 axes[2].tick_params(axis='x', rotation=45)
 
+# Gemma 1B plot
+sns.boxplot(data=gemma_1b_metrics_df, x='language', y='f1_score', ax=axes[3])
+axes[3].set_title('Distribution of F1 Scores by Language (Gemma 1B)')
+axes[3].set_xlabel('Language')
+axes[3].set_ylabel('F1 Score')
+axes[3].tick_params(axis='x', rotation=45)
+
+sns.boxplot(data=gemma_12b_qat_metrics_df, x='language', y='f1_score', ax=axes[4])
+axes[4].set_title('Distribution of F1 Scores by Language (Gemma 12B QAT)')
+axes[4].set_xlabel('Language')
+axes[4].set_ylabel('F1 Score')
+axes[4].tick_params(axis='x', rotation=45)
+
 plt.tight_layout()
 
 # Save figure to disk
@@ -222,6 +277,9 @@ print("\nDLP unique labels:\n", sorted(dlp_results_df['label'].unique()))
 
 print("\nGemma unique types:\n", sorted(gemma_results_df['type'].unique()))
 
+print("\nGemma 1B unique types:\n", sorted(gemma_1b_results_df['type'].unique()))
+
+print("\nGemma 12B QAT unique types:\n", sorted(gemma_12b_qat_results_df['type'].unique()))
 
 
 # %% DEV show some samples
@@ -274,7 +332,9 @@ for this_idx in german_samples['sample_idx']:
     sample_dlp = dlp_results_df[dlp_results_df['sample_idx'] == this_idx]
     sample_gemini = gemini_results_df[gemini_results_df['sample_idx'] == this_idx]
     sample_gemma = gemma_results_df[gemma_results_df['sample_idx'] == this_idx]
-
+    sample_gemma_12b_qat = gemma_12b_qat_results_df[gemma_12b_qat_results_df['sample_idx'] == this_idx]
+    sample_gemma_1b = gemma_1b_results_df[gemma_1b_results_df['sample_idx'] == this_idx]
+    
     print(f"\n--- Sample ID: {this_idx} ---")
 
     print("\nGround Truth Mask (Gold Standard):")
@@ -288,6 +348,12 @@ for this_idx in german_samples['sample_idx']:
 
     print("\nGemma Findings (Predictions):")
     display(highlight_spans_in_text(source_text, sample_gemma, highlight_color='#c8e6c9')) # Light Green
+
+    print("\nGemma 1B Findings (Predictions):")
+    display(highlight_spans_in_text(source_text, sample_gemma_1b, highlight_color='#c8e6c9')) # Light Green
+
+    print("\nGemma 12B QAT Findings (Predictions):")
+    display(highlight_spans_in_text(source_text, sample_gemma_12b_qat, highlight_color='#c8e6c9')) # Light Green
 
 # %%
 
@@ -319,6 +385,8 @@ plt.show()
 this_label_dlp_metrics_df = calculate_metrics_for_samples(dlp_results_df, this_label_data, sampled_df, dataset)
 this_label_gemini_metrics_df = calculate_metrics_for_samples(gemini_results_df, this_label_data, sampled_df, dataset)
 this_label_gemma_metrics_df = calculate_metrics_for_samples(gemma_results_df, this_label_data, sampled_df, dataset)
+this_label_gemma_1b_metrics_df = calculate_metrics_for_samples(gemma_1b_results_df, this_label_data, sampled_df, dataset)
+this_label_gemma_12b_qat_metrics_df = calculate_metrics_for_samples(gemma_12b_qat_results_df, this_label_data, sampled_df, dataset)
 
 # %%
 
@@ -326,11 +394,13 @@ this_label_gemma_metrics_df = calculate_metrics_for_samples(gemma_results_df, th
 recall_data = pd.DataFrame({
     'DLP': this_label_dlp_metrics_df['recall'],
     'Gemini': this_label_gemini_metrics_df['recall'],
-    'Gemma': this_label_gemma_metrics_df['recall']
+    'Gemma': this_label_gemma_metrics_df['recall'],
+    'Gemma 1B': this_label_gemma_1b_metrics_df['recall'],
+    'Gemma 12B QAT': this_label_gemma_12b_qat_metrics_df['recall']
 })
 
 # Create boxplot
-ax = recall_data.boxplot(column=['DLP', 'Gemini', 'Gemma'], 
+ax = recall_data.boxplot(column=['DLP', 'Gemini', 'Gemma', 'Gemma 1B', 'Gemma 12B QAT'], 
                         figsize=(10, 6),
                         whis=1.5)
 
@@ -351,6 +421,8 @@ sample_truth = this_label_data[this_label_data['sample_idx'] == this_idx]
 sample_dlp = dlp_results_df[dlp_results_df['sample_idx'] == this_idx]
 sample_gemini = gemini_results_df[gemini_results_df['sample_idx'] == this_idx]
 sample_gemma = gemma_results_df[gemma_results_df['sample_idx'] == this_idx]
+sample_gemma_1b = gemma_1b_results_df[gemma_1b_results_df['sample_idx'] == this_idx]
+sample_gemma_12b_qat = gemma_12b_qat_results_df[gemma_12b_qat_results_df['sample_idx'] == this_idx]
 
 print(f"\n--- Sample ID: {this_idx} ---")
 
@@ -365,6 +437,12 @@ display(highlight_spans_in_text(source_text, sample_gemini, highlight_color='#c8
 
 print("\nGemma Findings (Predictions):")
 display(highlight_spans_in_text(source_text, sample_gemma, highlight_color='#c8e6c9')) # Light Green
+
+print("\nGemma 1B Findings (Predictions):")
+display(highlight_spans_in_text(source_text, sample_gemma_1b, highlight_color='#c8e6c9')) # Light Green
+
+print("\nGemma 12B QAT Findings (Predictions):")
+display(highlight_spans_in_text(source_text, sample_gemma_12b_qat, highlight_color='#c8e6c9')) # Light Green
 
 
 # %%
@@ -381,11 +459,15 @@ for this_label in n_counts_ground_truth.index:
     this_label_dlp_metrics_df = calculate_metrics_for_samples(dlp_results_df, this_label_data, sampled_df, dataset)
     this_label_gemini_metrics_df = calculate_metrics_for_samples(gemini_results_df, this_label_data, sampled_df, dataset)
     this_label_gemma_metrics_df = calculate_metrics_for_samples(gemma_results_df, this_label_data, sampled_df, dataset)
+    this_label_gemma_1b_metrics_df = calculate_metrics_for_samples(gemma_1b_results_df, this_label_data, sampled_df, dataset)
+    this_label_gemma_12b_qat_metrics_df = calculate_metrics_for_samples(gemma_12b_qat_results_df, this_label_data, sampled_df, dataset)
 
     recall_data = pd.DataFrame({
         'DLP': this_label_dlp_metrics_df['recall'],
         'Gemini': this_label_gemini_metrics_df['recall'],
-        'Gemma': this_label_gemma_metrics_df['recall']
+        'Gemma': this_label_gemma_metrics_df['recall'],
+        'Gemma 1B': this_label_gemma_1b_metrics_df['recall'],
+        'Gemma 12B QAT': this_label_gemma_12b_qat_metrics_df['recall']
     })
 
     all_avg_recall_rates.append(recall_data.mean())
