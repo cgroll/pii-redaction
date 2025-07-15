@@ -1,0 +1,43 @@
+value,type
+Hirka Sa'id,PERSON_NAME
+1949-11-19,DATE_OF_BIRTH
+1974-01-14,DATE_OF_BIRTH
+pws,CREDIT_CARD_NUMBER
+the value of the PII entity found,PERSON_NAME
+Iljina Doksandokuz,PERSON_NAME
+481 Golfooord Purmerend,STREET_ADDRESS
+"Fort McDowel, AZ 85264",LOCATION
+"Lebanon Junction, KY 40150",LOCATION
+Ovayolu Polettin,PERSON_NAME
+danisa.mejditna@example.com,EMAIL_ADDRESS
+None,PERSON_NAME
+Leili Loum,PERSON_NAME
+Sou Vojo,PERSON_NAME
+"283 Route de Sauveterre, Pujaut, Occitanie, 30131, Mobile Home 341",STREET_ADDRESS
+"565 Chemin de derrière, Offroicourt, 88500 France",STREET_ADDRESS
+Dorit Kern Rosinski Dynes,PERSON_NAME
+Kázik,PERSON_NAME
+Berenice Favre,PERSON_NAME
+Germinal Graf,PERSON_NAME
+947 Unter den Eichen Burgstall Sachsen-Anhalt 39,STREET_ADDRESS
+"647, Chemin du Fresnot, Bretteville-sur-Odon, Gebäude 154, NOR 14760",STREET_ADDRESS
+1973,DATE_OF_BIRTH
+1959,DATE_OF_BIRTH
+1997,DATE_OF_BIRTH
+1936-01-17T09:58:37,DATE_OF_BIRTH
+No PII found,NONE
+Liaghat Pischl,PERSON_NAME
+Liaghat Dedié Kongthai,PERSON_NAME
+Giorgio Rossi,PERSON_NAME
+Marvi Chrapek,PERSON_NAME
+Zibo Inchaurtieta Streif Ziolkowski,PERSON_NAME
+Mirem Cabra,PERSON_NAME
+Ruifeng Costica Mellul Vad Klindworth,PERSON_NAME
+"Universidad de Barcelona, Av. Diagonal, 123, 08028 Barcelona",STREET_ADDRESS
+None,PERSON_NAME
+"178, Chemin du Mont Chevrier, Les Sauvages, 69170",STREET_ADDRESS
+"Calle Muelle de los Pórticos, 775, 33299, Gijón Jove, AS",STREET_ADDRESS
+"Valladolid, CL, 47016",LOCATION
+Milito Siepmann,PERSON_NAME
+Vaatheni Herndl Rank,PERSON_NAME
+309 Carretera de la Cala de Finestrar Finestrat Comunidad Valenciana 3509,STREET_ADDRESS
