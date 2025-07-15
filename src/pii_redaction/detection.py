@@ -194,6 +194,8 @@ def detect_pii_with_ollama(text: str, model='gemma3:1b'):
                 {'role': 'user', 'content': text},
             ],
             format='json',
+            options={'num_predict': 300
+                }
         )
 
         content_string = response['message']['content']
